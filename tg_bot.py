@@ -1,8 +1,12 @@
+from dotenv import load_dotenv
+import os
 import telebot
 
-TOKEN = "8432978310:AAGa2XWwZ9n62T6UG9r4lxAFhmQ40T3pXLg"
+load_dotenv()
 
-bot = telebot.TeleBot(TOKEN)
+api_token = os.getenv("TOKEN")
+
+bot = telebot.TeleBot("TOKEN")
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
