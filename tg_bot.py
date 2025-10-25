@@ -6,7 +6,7 @@ load_dotenv()
 
 api_token = os.getenv("TOKEN")
 
-bot = telebot.TeleBot("TOKEN")
+bot = telebot.TeleBot(api_token)
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
