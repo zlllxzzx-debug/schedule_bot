@@ -5,7 +5,6 @@ import telebot
 load_dotenv()
 
 api_token = os.getenv("TOKEN")
-
 bot = telebot.TeleBot(api_token)
 
 # Словарь для хранения состояния пользователей
@@ -22,18 +21,21 @@ def handle_start(message):
 @bot.message_handler(commands=['chats'])
 def handle_chats(message):
     user_id = message.from_user.id
-    user_state[user_id] = 'waiting_for_chats'
-    bot.send_message(message.chat.id, "Отправьте список ID чатов и их названий в формате:\nID Название")
+    if not os.path.exists(f"tokens/{user_id}.txt"):
+        bot.send_message(message.chat.id, "Сначала введите свой WhatsApp-токен.")
+    else:
+        user_state[user_id] = 'waiting_for_chats'
+        bot.send_message(message.chat.id, "Отправьте список ID чатов и их названий в формате:\nID Название")
 
 # Обработчик всех сообщений
 @bot.message_handler(func=lambda message: True)
-def save_data(message):
+def save_token(message):
     user_id = message.from_user.id
     if user_state.get(user_id) == 'waiting_for_token':
         token = message.text.strip()
         
-        # Сохранение токена в файл с названием id_пользователя.txt
-        with open(f"{user_id}.txt", "w") as file:
+        # Сохранение токена в файл с названием id_пользователя.txt в папке tokens
+        with open(f"tokens/{user_id}.txt", "w") as file:
             file.write(token)
         
         bot.send_message(message.chat.id, "Ваш WhatsApp-токен успешно сохранён!")
@@ -48,13 +50,13 @@ def save_data(message):
                 chat_data.append((chat_id, chat_name))
         
         # Сохранение данных о чатах в файл с названием id_пользователя_chats.txt
-        with open(f"{user_id}_chats.txt", "w") as file:
+        with open(f"chats/{user_id}_chats.txt", "w") as file:
             for chat_id, chat_name in chat_data:
                 file.write(f"{chat_id} {chat_name}\n")
         
         bot.send_message(message.chat.id, "Список чатов успешно сохранён!")
         user_state[user_id] = None  # Сбрасываем состояние пользователя
-    elif not os.path.exists(f"{user_id}.txt"):
+    elif not os.path.exists(f"tokens/{user_id}.txt"):
         bot.send_message(message.chat.id, "Токен не сохранён. Пожалуйста, отправьте ваш WhatsApp-токен.")
 
 print("Bot is running...")
