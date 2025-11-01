@@ -68,3 +68,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 tokens/
+chats/
