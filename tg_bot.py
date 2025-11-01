@@ -1,20 +1,25 @@
 from dotenv import load_dotenv
 import os
 import telebot
+from enum import StrEnum
+from enum import auto
+
+class State(StrEnum):
+    WAITING_FOR_TOKEN = auto()
+    WAITING_FOR_CHATS = auto()
 
 load_dotenv()
 
 api_token = os.getenv("TOKEN")
 bot = telebot.TeleBot(api_token)
 
-# Словарь для хранения состояния пользователей
-user_state = {}
+user_state = {} # Словарь для хранения состояния пользователей
 
 # Обработчик команды /start
 @bot.message_handler(commands=['start'])
 def handle_start(message):
     user_id = message.from_user.id
-    user_state[user_id] = 'waiting_for_token'
+    user_state[user_id] = State.waiting_for_token
     bot.send_message(message.chat.id, "Привет! Отправьте ваш WhatsApp-токен.")
 
 # Обработчик команды /chats
@@ -24,14 +29,14 @@ def handle_chats(message):
     if not os.path.exists(f"tokens/{user_id}.txt"):
         bot.send_message(message.chat.id, "Сначала введите свой WhatsApp-токен.")
     else:
-        user_state[user_id] = 'waiting_for_chats'
+        user_state[user_id] = State.waiting_for_chats
         bot.send_message(message.chat.id, "Отправьте список ID чатов и их названий в формате:\nID Название")
 
 # Обработчик всех сообщений
 @bot.message_handler(func=lambda message: True)
 def save_token(message):
     user_id = message.from_user.id
-    if user_state.get(user_id) == 'waiting_for_token':
+    if user_state.get(user_id) == State.waiting_for_token:
         token = message.text.strip()
         
         # Сохранение токена в файл с названием id_пользователя.txt в папке tokens
@@ -40,7 +45,7 @@ def save_token(message):
         
         bot.send_message(message.chat.id, "Ваш WhatsApp-токен успешно сохранён!")
         user_state[user_id] = None  # Сбрасываем состояние пользователя
-    elif user_state.get(user_id) == 'waiting_for_chats':
+    elif user_state.get(user_id) == State.waiting_for_chats:
         chats = message.text.strip().split('\n')
         chat_data = []
         for chat in chats:
