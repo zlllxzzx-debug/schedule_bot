@@ -8,6 +8,7 @@ from pathlib import Path
 class State(StrEnum):
     WAITING_FOR_TOKEN = auto()
     WAITING_FOR_CHATS = auto()
+    WAITING_FOR_MESSAGE = auto()
 
 load_dotenv()
 
@@ -33,6 +34,14 @@ def handle_chats(message):
     else:
         user_state[user_id] = State.WAITING_FOR_CHATS
         bot.send_message(message.chat.id, "Отправьте список ID чатов и их названий в формате:\nID Название")
+
+# Обработчик команды /msg
+@bot.message_handler(commands=['msg'])
+def handle_chats(message):
+    user_id = message.from_user.id
+    user_state[user_id] = State.WAITING_FOR_CHATS
+    bot.send_message(message.chat.id, "Введите текст для отправки.")
+
 
 # Обработчик всех сообщений
 @bot.message_handler(func=lambda message: True)
@@ -67,6 +76,22 @@ def save_token(message):
         user_state[user_id] = None  # Сбрасываем состояние пользователя
     elif not Path(f"tokens/{user_id}.txt").exists():
         bot.send_message(message.chat.id, "Токен не сохранён. Пожалуйста, отправьте ваш WhatsApp-токен.")
+
+# Функция для создания кнопок с чатами
+def get_chat_buttons(user_id):
+    file_path = Path(f"chats/{user_id}_chats.txt")
+    if file_path.exists():
+        with open(file_path, "r") as file:
+            chat_data = file.read().splitlines()
+        
+        keyboard = telebot.types.ReplyKeyboardMarkup(row_width=2)
+        for chat in chat_data:
+            chat_id, chat_name = chat.split()
+            keyboard.add(telebot.types.KeyboardButton(chat_name))
+        keyboard.add(telebot.types.KeyboardButton("Все"))
+        return keyboard
+    else:
+        return None
 
 print("Bot is running...")
 bot.polling(non_stop=True)
