@@ -49,13 +49,11 @@ def save_token(message):
     user_id = message.from_user.id
     if user_state.get(user_id) == State.WAITING_FOR_TOKEN:
         token = message.text.strip()
-
-        # Сохранение токена в файл с названием id_пользователя.txt в папке tokens
+        # Сохранение токена в файл
         file_path = Path(f"tokens/{user_id}.txt")
         file_path.write_text(token)
-        
         bot.send_message(message.chat.id, "Ваш WhatsApp-токен успешно сохранён!")
-        user_state[user_id] = None  # Сбрасываем состояние пользователя
+        user_state[user_id] = None
     elif user_state.get(user_id) == State.WAITING_FOR_CHATS:
         chats = message.text.strip().split('\n')
         chat_data = []
@@ -64,18 +62,18 @@ def save_token(message):
             if len(parts) == 2:
                 chat_id, chat_name = parts
                 chat_data.append((chat_id, chat_name))
-        
-        # Создание строки с данными о чатах
         chat_string = "\n".join([f"{chat_id} {chat_name}" for chat_id, chat_name in chat_data])
-        
-        # Сохранение данных о чатах в файл с названием id_пользователя_chats.txt
         file_path = Path(f"chats/{user_id}_chats.txt")
         file_path.write_text(chat_string)
-
         bot.send_message(message.chat.id, "Список чатов успешно сохранён!")
-        user_state[user_id] = None  # Сбрасываем состояние пользователя
-    elif not Path(f"tokens/{user_id}.txt").exists():
-        bot.send_message(message.chat.id, "Токен не сохранён. Пожалуйста, отправьте ваш WhatsApp-токен.")
+        user_state[user_id] = None
+    elif user_state.get(user_id) == State.WAITING_FOR_MESSAGE:
+        user_state[user_id] = State.WAITING_FOR_CHATS
+        bot.send_message(message.chat.id, "Выберите чат:", reply_markup=get_chat_buttons(user_id))
+    else:
+        if not Path(f"tokens/{user_id}.txt").exists():
+            bot.send_message(message.chat.id, "Токен не сохранён. Пожалуйста, отправьте ваш WhatsApp-токен.")
+            user_state[user_id] = State.WAITING_FOR_TOKEN  # Устанавливаем состояние пользователя
 
 # Функция для создания кнопок с чатами
 def get_chat_buttons(user_id):
@@ -84,11 +82,11 @@ def get_chat_buttons(user_id):
         with open(file_path, "r") as file:
             chat_data = file.read().splitlines()
         
-        keyboard = telebot.types.ReplyKeyboardMarkup(row_width=2)
+        keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
         for chat in chat_data:
             chat_id, chat_name = chat.split()
-            keyboard.add(telebot.types.KeyboardButton(chat_name))
-        keyboard.add(telebot.types.KeyboardButton("Все"))
+            keyboard.add(telebot.types.InlineKeyboardButton(chat_name, callback_data=chat_id))
+        keyboard.add(telebot.types.InlineKeyboardButton("Все", callback_data="all"))
         return keyboard
     else:
         return None
