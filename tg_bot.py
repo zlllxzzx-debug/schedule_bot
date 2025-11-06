@@ -39,7 +39,7 @@ def handle_chats(message):
 @bot.message_handler(commands=['msg'])
 def handle_chats(message):
     user_id = message.from_user.id
-    user_state[user_id] = State.WAITING_FOR_CHATS
+    user_state[user_id] = State.WAITING_FOR_MESSAGE
     bot.send_message(message.chat.id, "Введите текст для отправки.")
 
 
