@@ -8,6 +8,8 @@ from pathlib import Path
 class State(StrEnum):
     WAITING_FOR_TOKEN = auto()
     WAITING_FOR_CHATS = auto()
+    WAITING_FOR_CHAT = auto()
+    WAITING_FOR_MESSAGE = auto()
 
 load_dotenv()
 
@@ -34,13 +36,20 @@ def handle_chats(message):
         user_state[user_id] = State.WAITING_FOR_CHATS
         bot.send_message(message.chat.id, "Отправьте список ID чатов и их названий в формате:\nID Название")
 
+# Обработчик команды /msg
+@bot.message_handler(commands=['msg'])
+def handle_msg(message):
+    user_id = message.from_user.id
+    user_state[user_id] = State.WAITING_FOR_MESSAGE
+    bot.send_message(message.chat.id, "Введите текст для отправки.")
+
 # Обработчик всех сообщений
 @bot.message_handler(func=lambda message: True)
 def save_token(message):
     user_id = message.from_user.id
     if user_state.get(user_id) == State.WAITING_FOR_TOKEN:
         token = message.text.strip()
-
+        
         # Сохранение токена в файл с названием id_пользователя.txt в папке tokens
         file_path = Path(f"tokens/{user_id}.txt")
         file_path.write_text(token)
@@ -59,14 +68,54 @@ def save_token(message):
         # Создание строки с данными о чатах
         chat_string = "\n".join([f"{chat_id} {chat_name}" for chat_id, chat_name in chat_data])
         
-        # Сохранение данных о чатах в файл с названием id_пользователя_chats.txt
+        # Сохранение данных о чатах в файл с названием id_пользователя_chats.txt в папке chats
         file_path = Path(f"chats/{user_id}_chats.txt")
         file_path.write_text(chat_string)
-
+        
         bot.send_message(message.chat.id, "Список чатов успешно сохранён!")
         user_state[user_id] = None  # Сбрасываем состояние пользователя
+    elif user_state.get(user_id) == State.WAITING_FOR_MESSAGE:
+        text = message.text.strip()
+        user_state[user_id] = State.WAITING_FOR_CHAT
+        bot.send_message(message.chat.id, "Выберите чат:", reply_markup=get_chat_buttons(user_id))
+    elif user_state.get(user_id) == State.WAITING_FOR_CHAT:
+        # Игнорируем случайный текст, если пользователь не выбрал чат
+        pass
     elif not Path(f"tokens/{user_id}.txt").exists():
         bot.send_message(message.chat.id, "Токен не сохранён. Пожалуйста, отправьте ваш WhatsApp-токен.")
+        user_state[user_id] = State.WAITING_FOR_TOKEN  # Устанавливаем состояние пользователя
+
+# Функция для создания кнопок с чатами
+def get_chat_buttons(user_id):
+    file_path = Path(f"chats/{user_id}_chats.txt")
+    if file_path.exists():
+        with open(file_path, "r") as file:
+            chat_data = file.read().splitlines()
+        
+        keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
+        for chat in chat_data:
+            chat_id, chat_name = chat.split()
+            keyboard.add(telebot.types.InlineKeyboardButton(chat_name, callback_data=chat_id))
+        keyboard.add(telebot.types.InlineKeyboardButton("Все", callback_data="all"))
+        return keyboard
+    else:
+        return None
+
+# Обработчик кнопок
+@bot.callback_query_handler(func=lambda call: True)
+def handle_chat_selection(call):
+    user_id = call.from_user.id
+    chat_id = call.data
+    
+    if chat_id == "all":
+        # Обработка кнопки "Все"
+        pass
+    else:
+        # Обработка выбора конкретного чата
+        pass
+    
+    # Сброс состояния пользователя
+    user_state[user_id] = None
 
 print("Bot is running...")
 bot.polling(non_stop=True)
