@@ -65,7 +65,6 @@ def save_token(message):
         
         # Сохранение токена в файл с названием id_пользователя.txt в папке tokens
         file_path = Path(f"tokens/{user_id}.txt")
-        file_path.parent.mkdir(parents=True, exist_ok=True)  # Создаем папку если не существует
         file_path.write_text(token)
         
         bot.send_message(message.chat.id, "Ваш WhatsApp-токен успешно сохранён!")
@@ -85,7 +84,6 @@ def save_token(message):
         
         # Сохранение данных о чатах в файл с названием id_пользователя_chats.txt в папке chats
         file_path = Path(f"chats/{user_id}_chats.txt")
-        file_path.parent.mkdir(parents=True, exist_ok=True)  # Создаем папку если не существует
         file_path.write_text(chat_string)
         
         bot.send_message(message.chat.id, "Список чатов успешно сохранён!")
@@ -96,11 +94,10 @@ def save_token(message):
         user_state[user_id] = State.WAITING_FOR_CHAT
         bot.send_message(message.chat.id, "Выберите чат:", reply_markup=get_chat_buttons(user_id))
     elif user_state.get(user_id) == State.WAITING_FOR_CHAT:
-        # Игнорируем случайный текст, если пользователь не выбрал чат
-        pass
-    elif not Path(f"tokens/{user_id}.txt").exists():
-        bot.send_message(message.chat.id, "Токен не сохранён. Пожалуйста, отправьте ваш WhatsApp-токен.")
-        user_state[user_id] = State.WAITING_FOR_TOKEN  # Устанавливаем состояние пользователя
+      # Если пользователь отправил текст вместо выбора чата
+      if message.text:
+        bot.send_message(message.chat.id, "Пожалуйста, выберите чат из кнопок ниже")
+        bot.send_message(message.chat.id, "Выберите чат:", reply_markup=get_chat_buttons(user_id))
 
 # Функция для создания кнопок с чатами
 def get_chat_buttons(user_id):
@@ -118,7 +115,7 @@ def get_chat_buttons(user_id):
                 keyboard.add(telebot.types.InlineKeyboardButton(chat_name, callback_data=chat_id))
         keyboard.add(telebot.types.InlineKeyboardButton("Все", callback_data="all"))
         return keyboard
-    else:
+    if not file_path.exists():
         return None
 
 # Функция для отправки сообщения через Green API
@@ -127,7 +124,6 @@ def send_whatsapp_message(instance_id, token, chat_id, message_text):
     
     payload = {"chatId": f"{chat_id}@c.us", "message": message_text}
     
-    headers = {'Content-Type': 'application/json'}
     
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=30)
@@ -194,26 +190,27 @@ def handle_chat_selection(call):
                 success_count += 1
         
         bot.send_message(call.message.chat.id, f"Отправка завершена. Успешно отправлено: {success_count}/{total_count}")
+        return None
     
-    else:
-        # Отправляем сообщение в выбранный чат
-        chat_name = None
-        for cid, name in chats:
-            if cid == selected_chat:
-                chat_name = name
-                break
+    # Отправляем сообщение в выбранный чат
+    chat_name = None
+    for cid, name in chats:
+        if cid == selected_chat:
+            chat_name = name
+            break
+    
+    if chat_name:
+        bot.answer_callback_query(call.id, f"Отправка в {chat_name}...")
+        success, result_msg = send_whatsapp_message(instance_id, api_token, selected_chat, message_text)
         
-        if chat_name:
-            bot.answer_callback_query(call.id, f"Отправка в {chat_name}...")
-            success, result_msg = send_whatsapp_message(instance_id, api_token, selected_chat, message_text)
-            
-            if success:
-                bot.send_message(call.message.chat.id, f"Сообщение успешно отправлено в чат: {chat_name}")
-            else:
-                bot.send_message(call.message.chat.id, f"Ошибка при отправке в {chat_name}: {result_msg}")
+        if success:
+            bot.send_message(call.message.chat.id, f"Сообщение успешно отправлено в чат: {chat_name}")
         else:
-            bot.answer_callback_query(call.id, "Чат не найден.")
-    
+            bot.send_message(call.message.chat.id, f"Ошибка при отправке в {chat_name}: {result_msg}")
+    if not chat_name:
+        bot.answer_callback_query(call.id, "Чат не найден.")
+        return None
+            
     # Сброс состояния пользователя
     user_state[user_id] = None
     if user_id in user_message:
