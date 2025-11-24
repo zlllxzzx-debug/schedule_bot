@@ -207,7 +207,7 @@ def handle_chat_selection(call):
     bot.answer_callback_query(call.id, f"Отправка в {chat_name}...")
     success, result_msg = send_whatsapp_message(instance_id, api_token, selected_chat, message_text)
 
-    if not success:
+    if success:
         bot.send_message(call.message.chat.id, f"Ошибка при отправке в {chat_name}: {result_msg}")
     else:
         bot.send_message(call.message.chat.id, f"Сообщение успешно отправлено в чат: {chat_name}")
