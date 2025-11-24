@@ -84,8 +84,7 @@ def save_token(message):
         
         # Сохранение данных о чатах в файл с названием id_пользователя_chats.txt в папке chats
         file_path = Path(f"chats/{user_id}_chats.txt")
-        existing = file_path.read_text() if file_path.exists() else ""
-        file_path.write_text(existing + "\n" + chat_string if existing else chat_string)
+        file_path.write_text(chat_string)
         
         bot.send_message(message.chat.id, "Список чатов успешно сохранён!")
         user_state[user_id] = None  # Сбрасываем состояние пользователя
@@ -97,7 +96,8 @@ def save_token(message):
     elif user_state.get(user_id) == State.WAITING_FOR_CHAT:
       # Если пользователь отправил текст вместо выбора чата
       if message.text:
-        bot.send_message(message.chat.id, "Пожалуйста, выберите чат из кнопок ниже", reply_markup=get_chat_buttons(user_id))
+        bot.send_message(message.chat.id, "Пожалуйста, выберите чат из кнопок ниже")
+        bot.send_message(message.chat.id, "Выберите чат:", reply_markup=get_chat_buttons(user_id))
 
 # Функция для создания кнопок с чатами
 def get_chat_buttons(user_id):
@@ -190,6 +190,7 @@ def handle_chat_selection(call):
                 success_count += 1
         
         bot.send_message(call.message.chat.id, f"Отправка завершена. Успешно отправлено: {success_count}/{total_count}")
+        return None
     
     # Отправляем сообщение в выбранный чат
     chat_name = None
@@ -197,21 +198,19 @@ def handle_chat_selection(call):
         if cid == selected_chat:
             chat_name = name
             break
-
-    # Early return - обрабатываем отрицательный случай
+    
+    if chat_name:
+        bot.answer_callback_query(call.id, f"Отправка в {chat_name}...")
+        success, result_msg = send_whatsapp_message(instance_id, api_token, selected_chat, message_text)
+        
+        if success:
+            bot.send_message(call.message.chat.id, f"Сообщение успешно отправлено в чат: {chat_name}")
+        else:
+            bot.send_message(call.message.chat.id, f"Ошибка при отправке в {chat_name}: {result_msg}")
     if not chat_name:
         bot.answer_callback_query(call.id, "Чат не найден.")
-        return None 
-    
-    # Дальше код выполняется ТОЛЬКО если chat_name существует
-    bot.answer_callback_query(call.id, f"Отправка в {chat_name}...")
-    success, result_msg = send_whatsapp_message(instance_id, api_token, selected_chat, message_text)
-
-    if not success:
-        bot.send_message(call.message.chat.id, f"Ошибка при отправке в {chat_name}: {result_msg}")
-    else:
-        bot.send_message(call.message.chat.id, f"Сообщение успешно отправлено в чат: {chat_name}")
-
+        return None
+            
     # Сброс состояния пользователя
     user_state[user_id] = None
     if user_id in user_message:
