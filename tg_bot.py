@@ -1,3 +1,4 @@
+from wsgiref import headers
 from dotenv import load_dotenv
 import os
 import telebot
@@ -103,18 +104,21 @@ def save_token(message):
 def get_chat_buttons(user_id):
     file_path = Path(f"chats/{user_id}_chats.txt")
     if file_path.exists():
-        with open(file_path, "r", encoding='utf-8') as file:
-            chat_data = file.read().splitlines()
-        
-        keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
-        for chat in chat_data:
-            parts = chat.split()
-            if len(parts) >= 2:
-                chat_id = parts[0]
-                chat_name = ' '.join(parts[1:])
-                keyboard.add(telebot.types.InlineKeyboardButton(chat_name, callback_data=chat_id))
+        return None
+    
+    with open(file_path, "r", encoding='utf-8') as file:
+        chat_data = file.read().splitlines()
+
+    keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
+    for chat in chat_data:
+        parts = chat.split()
+        if len(parts) >= 2:
+            chat_id = parts[0]
+            chat_name = ' '.join(parts[1:])
+            keyboard.add(telebot.types.InlineKeyboardButton(chat_name, callback_data=chat_id))
         keyboard.add(telebot.types.InlineKeyboardButton("Все", callback_data="all"))
         return keyboard
+
     if not file_path.exists():
         return None
 
