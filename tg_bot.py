@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 import os
 import telebot
 import requests
+import json
 from enum import StrEnum
 from enum import auto
 from pathlib import Path 
@@ -95,8 +96,7 @@ def save_token(message):
         user_state[user_id] = State.WAITING_FOR_CHAT
         bot.send_message(message.chat.id, "Выберите чат:", reply_markup=get_chat_buttons(user_id))
     elif user_state.get(user_id) == State.WAITING_FOR_CHAT:
-      # Если пользователь отправил текст вместо выбора чата
-      if message.text:
+        # Пользователь ввел текст вместо выбора чата
         bot.send_message(message.chat.id, "Пожалуйста, выберите чат из кнопок ниже", reply_markup=get_chat_buttons(user_id))
 
 # Функция для создания кнопок с чатами
@@ -169,14 +169,14 @@ def handle_chat_selection(call):
     with open(chats_file, "r", encoding='utf-8') as file:
         chat_lines = file.read().splitlines()
     
-    chats = []
+    chats = {}
     for line in chat_lines:
         parts = line.split()
         if len(parts) >= 2:
             chat_id = parts[0]
             chat_name = ' '.join(parts[1:])
-            chats.append((chat_id, chat_name))
-    
+            chats[chat_id] = chat_name  
+
     if selected_chat == "all":
         # Отправляем сообщение во все чаты
         success_count = 0
@@ -191,12 +191,7 @@ def handle_chat_selection(call):
         
         bot.send_message(call.message.chat.id, f"Отправка завершена. Успешно отправлено: {success_count}/{total_count}")
     
-    # Отправляем сообщение в выбранный чат
-    chat_name = None
-    for cid, name in chats:
-        if cid == selected_chat:
-            chat_name = name
-            break
+    chat_name = chats.get(selected_chat)
 
     # Early return - обрабатываем отрицательный случай
     if not chat_name:
