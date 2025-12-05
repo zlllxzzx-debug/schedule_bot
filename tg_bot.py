@@ -103,7 +103,7 @@ def save_token(message):
 # Функция для создания кнопок с чатами
 def get_chat_buttons(user_id):
     file_path = Path(f"chats/{user_id}_chats.txt")
-    if file_path.exists():
+    if not file_path.exists():
         return None
     
     with open(file_path, "r", encoding='utf-8') as file:
@@ -116,11 +116,8 @@ def get_chat_buttons(user_id):
             chat_id = parts[0]
             chat_name = ' '.join(parts[1:])
             keyboard.add(telebot.types.InlineKeyboardButton(chat_name, callback_data=chat_id))
-        keyboard.add(telebot.types.InlineKeyboardButton("Все", callback_data="all"))
-        return keyboard
-
-    if not file_path.exists():
-        return None
+    keyboard.add(telebot.types.InlineKeyboardButton("Все", callback_data="all"))
+    return keyboard
 
 # Функция для отправки сообщения через Green API
 def send_whatsapp_message(instance_id, token, chat_id, message_text):
