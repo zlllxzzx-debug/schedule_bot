@@ -48,7 +48,6 @@ def handle_msg(message):
     if not file_path.exists():
         bot.send_message(message.chat.id, "Сначала введите свой WhatsApp-токен.")
         user_state[user_id] = State.WAITING_FOR_TOKEN
-        returnpath
         
     chats_file_path = Path(f"chats/{user_id}_chats.txt")
     if not chats_file_path.exists():
@@ -87,8 +86,7 @@ def save_token(message):
         # Сохранение данных о чатах в файл с названием id_пользователя_chats.txt в папке chats
         file_path = Path(f"chats/{user_id}_chats.txt")
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        existing = file_path.read_text(encoding='utf-8') if file_path.exists() else ""
-        file_path.write_text((existing + "\n" + chat_string if existing else chat_string), encoding='utf-8')
+        file_path.write_text(chat_string, encoding="utf-8")
 
         bot.send_message(message.chat.id, "Список чатов успешно сохранён!")
         user_state[user_id] = None  # Сбрасываем состояние пользователя
@@ -107,18 +105,9 @@ def get_chat_buttons(user_id):
     if not file_path.exists():
         return None
     
-    try:
-        with open(file_path, "r", encoding='utf-8') as file:
-            chat_data = file.read().splitlines()
-    except UnicodeDecodeError:
-        # Пробуем другие кодировки если UTF-8 не работает
-        try:
-            with open(file_path, "r", encoding='cp1251') as file:
-                chat_data = file.read().splitlines()
-        except:
-            with open(file_path, "r", encoding='latin-1') as file:
-                chat_data = file.read().splitlines()
-    
+    with open(file_path, "r", encoding='utf-8') as file:
+        chat_data = file.read().splitlines()
+        
     keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
     for chat in chat_data:
         parts = chat.split()
