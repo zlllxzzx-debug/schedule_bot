@@ -48,7 +48,8 @@ def handle_msg(message):
     if not file_path.exists():
         bot.send_message(message.chat.id, "Сначала введите свой WhatsApp-токен.")
         user_state[user_id] = State.WAITING_FOR_TOKEN
-        
+        return
+    
     chats_file_path = Path(f"chats/{user_id}_chats.txt")
     if not chats_file_path.exists():
         bot.send_message(message.chat.id, "Сначала сохраните список чатов с помощью команды /chats.")
