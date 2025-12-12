@@ -49,7 +49,7 @@ def handle_msg(message):
         bot.send_message(message.chat.id, "Сначала введите свой WhatsApp-токен.")
         user_state[user_id] = State.WAITING_FOR_TOKEN
         return
-        
+    
     chats_file_path = Path(f"chats/{user_id}_chats.txt")
     if not chats_file_path.exists():
         bot.send_message(message.chat.id, "Сначала сохраните список чатов с помощью команды /chats.")
@@ -86,9 +86,9 @@ def save_token(message):
         
         # Сохранение данных о чатах в файл с названием id_пользователя_chats.txt в папке chats
         file_path = Path(f"chats/{user_id}_chats.txt")
-        existing = file_path.read_text() if file_path.exists() else ""
-        file_path.write_text(existing + "\n" + chat_string if existing else chat_string)
-        
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(chat_string, encoding="utf-8")
+
         bot.send_message(message.chat.id, "Список чатов успешно сохранён!")
         user_state[user_id] = None  # Сбрасываем состояние пользователя
     elif user_state.get(user_id) == State.WAITING_FOR_MESSAGE:
@@ -103,12 +103,12 @@ def save_token(message):
 # Функция для создания кнопок с чатами
 def get_chat_buttons(user_id):
     file_path = Path(f"chats/{user_id}_chats.txt")
-    if file_path.exists():
+    if not file_path.exists():
         return None
     
     with open(file_path, "r", encoding='utf-8') as file:
         chat_data = file.read().splitlines()
-
+        
     keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
     for chat in chat_data:
         parts = chat.split()
@@ -116,11 +116,9 @@ def get_chat_buttons(user_id):
             chat_id = parts[0]
             chat_name = ' '.join(parts[1:])
             keyboard.add(telebot.types.InlineKeyboardButton(chat_name, callback_data=chat_id))
-        keyboard.add(telebot.types.InlineKeyboardButton("Все", callback_data="all"))
-        return keyboard
-
-    if not file_path.exists():
-        return None
+    
+    keyboard.add(telebot.types.InlineKeyboardButton("Всем", callback_data="all"))
+    return keyboard
 
 # Функция для отправки сообщения через Green API
 def send_whatsapp_message(instance_id, token, chat_id, message_text):
