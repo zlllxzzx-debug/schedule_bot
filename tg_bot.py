@@ -1,4 +1,3 @@
-from wsgiref import headers
 from dotenv import load_dotenv
 import os
 import telebot
@@ -128,7 +127,7 @@ def send_whatsapp_message(instance_id, token, chat_id, message_text):
     
     
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        response = requests.post(url, json=payload, timeout=30)
         response.raise_for_status()
         return True, "Сообщение успешно отправлено"
     except requests.exceptions.RequestException as e:
