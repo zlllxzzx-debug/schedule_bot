@@ -26,7 +26,7 @@ user_message = {} # Словарь для хранения сообщений п
 def handle_start(message):
     user_id = message.from_user.id
     user_state[user_id] = State.WAITING_FOR_TOKEN
-    bot.send_message(message.chat.id, "Привет! Отправьте ваш WhatsApp-токен.")
+    bot.send_message(message.chat.id, "Привет! Отправьте ваш WhatsApp-токен в следующем формате: instance_id api_token.")
 
 # Обработчик команды /chats
 @bot.message_handler(commands=['chats'])
@@ -45,7 +45,7 @@ def handle_msg(message):
     user_id = message.from_user.id
     file_path = Path(f"tokens/{user_id}.txt")
     if not file_path.exists():
-        bot.send_message(message.chat.id, "Сначала введите свой WhatsApp-токен.")
+        bot.send_message(message.chat.id, "Сначала введите свой WhatsApp-токен в следующем формате: instance_id api_token.")
         user_state[user_id] = State.WAITING_FOR_TOKEN
         return
     
@@ -204,9 +204,9 @@ def handle_chat_selection(call):
     success, result_msg = send_whatsapp_message(instance_id, api_token, selected_chat, message_text)
 
     if success:
-        bot.send_message(call.message.chat.id, f"Ошибка при отправке в {chat_name}: {result_msg}")
-    else:
         bot.send_message(call.message.chat.id, f"Сообщение успешно отправлено в чат: {chat_name}")
+    else:
+        bot.send_message(call.message.chat.id, f"Ошибка при отправке в {chat_name}: {result_msg}")
 
     # Сброс состояния пользователя
     user_state[user_id] = None
