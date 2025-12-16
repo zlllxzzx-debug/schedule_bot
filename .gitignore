@@ -69,3 +69,5 @@ dmypy.json
 .pyre/
 tokens/
 chats/
+wa_sessions/
+.idea/

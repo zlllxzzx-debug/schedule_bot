@@ -1,14 +1,15 @@
 from dotenv import load_dotenv
 import os
 import telebot
-import requests
-import json
 from enum import StrEnum
 from enum import auto
-from pathlib import Path 
+from pathlib import Path
+
+from wa_driver import get_wa_page, is_login, get_qr_code, wait_until_login, send_group_msg, send_personal_msg
+
 
 class State(StrEnum):
-    WAITING_FOR_TOKEN = auto()
+    WAITING_FOR_LOGIN = auto()
     WAITING_FOR_CHATS = auto()
     WAITING_FOR_CHAT = auto()
     WAITING_FOR_MESSAGE = auto()
@@ -25,30 +26,48 @@ user_message = {} # Словарь для хранения сообщений п
 @bot.message_handler(commands=['start'])
 def handle_start(message):
     user_id = message.from_user.id
-    user_state[user_id] = State.WAITING_FOR_TOKEN
-    bot.send_message(message.chat.id, "Привет! Отправьте ваш WhatsApp-токен в следующем формате: instance_id api_token.")
+    bot.send_message(
+        message.chat.id,
+        "Открываем WhatsApp для авторизации..."
+    )
+    with get_wa_page(user_id) as page:
+        if is_login(page):
+            bot.send_message(
+                message.chat.id,
+                "Вы уже авторизованы, выполните команду /chats для заполнения списка чатов или "
+                "команду /msg для отправки сообщения"
+            )
+            return
+
+        user_state[user_id] = State.WAITING_FOR_LOGIN
+        bot.send_photo(message.chat.id, get_qr_code(page, user_id), "Отсканируйте QR-код в WhatsApp")
+        try:
+            wait_until_login(page)
+        except TimeoutError:
+            bot.send_message(
+                message.chat.id,
+                "Время ожидания авторизации вышло. Попробуйте снова выполнив команду /start"
+            )
+
+        bot.send_message(
+            message.chat.id,
+            "Отлично! Вы успешно авторизованы, теперь заполните список контактов командой /chats "
+            "или отправьте сообщение командой /msg"
+        )
+
 
 # Обработчик команды /chats
 @bot.message_handler(commands=['chats'])
 def handle_chats(message):
     user_id = message.from_user.id
-    file_path = Path(f"tokens/{user_id}.txt")
-    if not file_path.exists():
-        bot.send_message(message.chat.id, "Сначала введите свой WhatsApp-токен.")
-    else:
-        user_state[user_id] = State.WAITING_FOR_CHATS
-        bot.send_message(message.chat.id, "Отправьте список ID чатов и их названий в формате:\nID Название")
+    user_state[user_id] = State.WAITING_FOR_CHATS
+    bot.send_message(message.chat.id, "Отправьте список ID чатов и их названий в формате:\nID,Название")
 
 # Обработчик команды /msg
 @bot.message_handler(commands=['msg'])
 def handle_msg(message):
     user_id = message.from_user.id
-    file_path = Path(f"tokens/{user_id}.txt")
-    if not file_path.exists():
-        bot.send_message(message.chat.id, "Сначала введите свой WhatsApp-токен в следующем формате: instance_id api_token.")
-        user_state[user_id] = State.WAITING_FOR_TOKEN
-        return
-    
+
     chats_file_path = Path(f"chats/{user_id}_chats.txt")
     if not chats_file_path.exists():
         bot.send_message(message.chat.id, "Сначала сохраните список чатов с помощью команды /chats.")
@@ -61,27 +80,18 @@ def handle_msg(message):
 @bot.message_handler(func=lambda message: True)
 def save_token(message):
     user_id = message.from_user.id
-    if user_state.get(user_id) == State.WAITING_FOR_TOKEN:
-        token = message.text.strip()
-        
-        # Сохранение токена в файл с названием id_пользователя.txt в папке tokens
-        file_path = Path(f"tokens/{user_id}.txt")
-        file_path.write_text(token)
-        
-        bot.send_message(message.chat.id, "Ваш WhatsApp-токен успешно сохранён!")
-        user_state[user_id] = None  # Сбрасываем состояние пользователя
-    elif user_state.get(user_id) == State.WAITING_FOR_CHATS:
+    if user_state.get(user_id) == State.WAITING_FOR_CHATS:
         chats = message.text.strip().split('\n')
         chat_data = []
         for chat in chats:
-            parts = chat.split()
+            parts = chat.split(",")
             if len(parts) >= 2:
                 chat_id = parts[0]
                 chat_name = ' '.join(parts[1:])
                 chat_data.append((chat_id, chat_name))
         
         # Создание строки с данными о чатах
-        chat_string = "\n".join([f"{chat_id} {chat_name}" for chat_id, chat_name in chat_data])
+        chat_string = "\n".join([f"{chat_id},{chat_name}" for chat_id, chat_name in chat_data])
         
         # Сохранение данных о чатах в файл с названием id_пользователя_chats.txt в папке chats
         file_path = Path(f"chats/{user_id}_chats.txt")
@@ -110,28 +120,23 @@ def get_chat_buttons(user_id):
         
     keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
     for chat in chat_data:
-        parts = chat.split()
+        parts = chat.split(",")
         if len(parts) >= 2:
             chat_id = parts[0]
             chat_name = ' '.join(parts[1:])
             keyboard.add(telebot.types.InlineKeyboardButton(chat_name, callback_data=chat_id))
-    
-    keyboard.add(telebot.types.InlineKeyboardButton("Всем", callback_data="all"))
     return keyboard
 
-# Функция для отправки сообщения через Green API
-def send_whatsapp_message(instance_id, token, chat_id, message_text):
-    url = f"https://api.green-api.com/waInstance{instance_id}/sendMessage/{token}"
-    
-    payload = {"chatId": f"{chat_id}@c.us", "message": message_text}
-    
-    
-    try:
-        response = requests.post(url, json=payload, timeout=30)
-        response.raise_for_status()
-        return True, "Сообщение успешно отправлено"
-    except requests.exceptions.RequestException as e:
-        return False, f"Ошибка при отправке: {str(e)}"
+
+# Функция для отправки сообщения
+def send_whatsapp_message(user_id, wa_chat_id, message_text):
+    if wa_chat_id.isdigit():
+        with get_wa_page(user_id, main_page=False) as page:
+            send_personal_msg(page, wa_chat_id, message_text)
+    else:
+        with get_wa_page(user_id) as page:
+            send_group_msg(page, wa_chat_id, message_text)
+
 
 # Обработчик кнопок
 @bot.callback_query_handler(func=lambda call: True)
@@ -145,22 +150,6 @@ def handle_chat_selection(call):
         bot.answer_callback_query(call.id, "Сообщение не найдено. Попробуйте снова.")
         return
     
-    # Получаем токен пользователя
-    token_file = Path(f"tokens/{user_id}.txt")
-    if not token_file.exists():
-        bot.answer_callback_query(call.id, "Токен не найден. Введите токен снова.")
-        user_state[user_id] = State.WAITING_FOR_TOKEN
-        return
-    
-    # Читаем токен (предполагаем, что это полный ID инстанса и токен через пробел)
-    token_data = token_file.read_text().strip().split()
-    if len(token_data) != 2:
-        bot.answer_callback_query(call.id, "Неверный формат токена. Введите токен снова.")
-        user_state[user_id] = State.WAITING_FOR_TOKEN
-        return
-    
-    instance_id, api_token = token_data
-    
     # Получаем список чатов
     chats_file = Path(f"chats/{user_id}_chats.txt")
     if not chats_file.exists():
@@ -172,26 +161,12 @@ def handle_chat_selection(call):
     
     chats = {}
     for line in chat_lines:
-        parts = line.split()
+        parts = line.split(",")
         if len(parts) >= 2:
             chat_id = parts[0]
             chat_name = ' '.join(parts[1:])
             chats[chat_id] = chat_name  
 
-    if selected_chat == "all":
-        # Отправляем сообщение во все чаты
-        success_count = 0
-        total_count = len(chats)
-        
-        bot.answer_callback_query(call.id, f"Начинаю отправку в {total_count} чатов...")
-        
-        for chat_id, chat_name in chats:
-            success, result_msg = send_whatsapp_message(instance_id, api_token, chat_id, message_text)
-            if success:
-                success_count += 1
-        
-        bot.send_message(call.message.chat.id, f"Отправка завершена. Успешно отправлено: {success_count}/{total_count}")
-    
     chat_name = chats.get(selected_chat)
 
     # Early return - обрабатываем отрицательный случай
@@ -200,13 +175,14 @@ def handle_chat_selection(call):
         return None 
     
     # Дальше код выполняется ТОЛЬКО если chat_name существует
-    bot.answer_callback_query(call.id, f"Отправка в {chat_name}...")
-    success, result_msg = send_whatsapp_message(instance_id, api_token, selected_chat, message_text)
+    bot.send_message(call.message.chat.id, f"Отправка в {chat_name}. Дождитесь ответа бота, это займет некоторое время...")
 
-    if success:
-        bot.send_message(call.message.chat.id, f"Сообщение успешно отправлено в чат: {chat_name}")
+    try:
+        send_whatsapp_message(user_id, selected_chat, message_text)
+    except Exception as exc:
+        bot.send_message(call.message.chat.id, f"Ошибка при отправке в {chat_name}: {str(exc)}")
     else:
-        bot.send_message(call.message.chat.id, f"Ошибка при отправке в {chat_name}: {result_msg}")
+        bot.send_message(call.message.chat.id, f"Сообщение успешно отправлено в чат: {chat_name}")
 
     # Сброс состояния пользователя
     user_state[user_id] = None
@@ -214,7 +190,6 @@ def handle_chat_selection(call):
         del user_message[user_id]
 
 # Создаем необходимые папки при запуске
-Path("tokens").mkdir(exist_ok=True)
 Path("chats").mkdir(exist_ok=True)
 
 print("Bot is running...")
